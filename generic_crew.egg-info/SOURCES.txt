@@ -1,0 +1,17 @@
+pyproject.toml
+setup.cfg
+gat/__init__.py
+gat/__main__.py
+gat/cli.py
+gat/config_loader.py
+gat/work_log.py
+gat/phases/__init__.py
+gat/phases/execution_phase.py
+gat/phases/hiring_phase.py
+gat/phases/requirements_phase.py
+gat/utils/__init__.py
+gat/utils/work_log.py
+generic_crew.egg-info/PKG-INFO
+generic_crew.egg-info/SOURCES.txt
+generic_crew.egg-info/dependency_links.txt
+generic_crew.egg-info/top_level.txt

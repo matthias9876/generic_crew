@@ -1,0 +1,7 @@
+# GAT model registry
+# Keys are logical aliases used in crew YAML files.
+# Values are Ollama model strings as accepted by crewai.LLM.
+models:
+  large:  "ollama/qwen3.5:35b-ctx32k"
+  dev:    "ollama/qwen3.5:9b-ctx16k"
+  tester: "ollama/mistral:ctx16k"

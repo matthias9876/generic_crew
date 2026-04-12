@@ -1,0 +1,7 @@
+Thanks for your message! Please let me know your preferred approach for the permanent PYTHONPATH fix:
+
+- **.env file** (for dotenv/direnv): Easy for local development, works with compatible tools.
+- **Test runner config** (pytest.ini, unittest, Makefile): Ensures PYTHONPATH is set for all test runs, including CI.
+
+Just tell me your preference, and I’ll set it up for you!
+
