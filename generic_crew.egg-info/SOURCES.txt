@@ -10,7 +10,6 @@ gat/phases/execution_phase.py
 gat/phases/hiring_phase.py
 gat/phases/requirements_phase.py
 gat/utils/__init__.py
-gat/utils/work_log.py
 generic_crew.egg-info/PKG-INFO
 generic_crew.egg-info/SOURCES.txt
 generic_crew.egg-info/dependency_links.txt
