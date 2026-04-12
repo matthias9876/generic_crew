@@ -1,7 +1,24 @@
 # GAT model registry
-# Keys are logical aliases used in crew YAML files.
-# Values are Ollama model strings as accepted by crewai.LLM.
-models:
-  large:  "ollama/qwen3.5:35b-ctx32k"
-  dev:    "ollama/qwen3.5:9b-ctx16k"
-  tester: "ollama/mistral:ctx16k"
+# Two presets: "gpu" (fast, fits 12GB VRAM) and "precise" (slower, uses 64GB main memory)
+#
+# Usage:
+#   python -m gat requirements --rd reqs.md --preset gpu      # fast, GPU-bound
+#   python -m gat requirements --rd reqs.md --preset precise   # slow, CPU/RAM-bound
+
+presets:
+  gpu:
+    # Fits in 12GB GPU VRAM — fast inference, less accurate
+    models:
+      large:  "ollama/qwen3.5:9b-ctx16k"
+      dev:    "ollama/qwen3.5:2b"
+      tester: "ollama/mistral:latest"
+
+  precise:
+    # Uses 64GB main memory — slower but more capable
+    models:
+      large:  "ollama/qwen3.5:35b-ctx32k"
+      dev:    "ollama/qwen3.5:9b-ctx16k"
+      tester: "ollama/mistral:ctx16k"
+
+# Default preset when --preset is not specified
+default_preset: gpu

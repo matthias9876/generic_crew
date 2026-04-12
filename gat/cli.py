@@ -1,6 +1,5 @@
 import sys
 import argparse
-import traceback
 from gat import config_loader
 from gat.phases import requirements_phase, hiring_phase, execution_phase
 
@@ -17,6 +16,7 @@ def main(argv=None):
     req_parser.add_argument("--rd", required=True, help="Path to the requirements document")
     req_parser.add_argument("--output", default="review.md", help="Path for the output review document")
     req_parser.add_argument("--models", default="gat/models.yaml", help="Path to models YAML")
+    req_parser.add_argument("--preset", default=None, help="Model preset: 'gpu' (fast, 12GB VRAM) or 'precise' (slow, 64GB RAM)")
     req_parser.add_argument("--logs", default="logs/", help="Root directory for agent work logs")
 
     # hire subcommand
@@ -24,6 +24,7 @@ def main(argv=None):
     hire_parser.add_argument("--rd", required=True, help="Path to the requirements document")
     hire_parser.add_argument("--output", default="crew.yaml", help="Path for the generated crew YAML")
     hire_parser.add_argument("--models", default="gat/models.yaml", help="Path to models YAML")
+    hire_parser.add_argument("--preset", default=None, help="Model preset: 'gpu' (fast, 12GB VRAM) or 'precise' (slow, 64GB RAM)")
     hire_parser.add_argument("--logs", default="logs/", help="Root directory for agent work logs")
 
     # run subcommand
@@ -31,11 +32,12 @@ def main(argv=None):
     run_parser.add_argument("--rd", required=True, help="Path to the requirements document")
     run_parser.add_argument("--crew", required=True, help="Path to the crew YAML from the hire phase")
     run_parser.add_argument("--models", default="gat/models.yaml", help="Path to models YAML")
+    run_parser.add_argument("--preset", default=None, help="Model preset: 'gpu' (fast, 12GB VRAM) or 'precise' (slow, 64GB RAM)")
     run_parser.add_argument("--logs", default="logs/", help="Root directory for agent work logs")
 
     try:
         args = parser.parse_args(argv)
-        models = config_loader.load_models(args.models)
+        models = config_loader.load_models(args.models, preset=args.preset)
         if args.phase == "requirements":
             result = requirements_phase.run(
                 rd_path=args.rd,

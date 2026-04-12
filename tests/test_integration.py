@@ -121,7 +121,7 @@ def test_cli_requirements_roundtrip(tmp_path, monkeypatch):
 
     m = mock.Mock(return_value=output_path)
     monkeypatch.setattr("gat.phases.requirements_phase.run", m)
-    monkeypatch.setattr("gat.config_loader.load_models", lambda p: MODELS)
+    monkeypatch.setattr("gat.config_loader.load_models", lambda p, preset=None: MODELS)
 
     from gat.cli import main
     main(["requirements", "--rd", rd_path, "--output", output_path,
@@ -136,7 +136,7 @@ def test_cli_hire_roundtrip(tmp_path, monkeypatch):
 
     m = mock.Mock(return_value=crew_path)
     monkeypatch.setattr("gat.phases.hiring_phase.run", m)
-    monkeypatch.setattr("gat.config_loader.load_models", lambda p: MODELS)
+    monkeypatch.setattr("gat.config_loader.load_models", lambda p, preset=None: MODELS)
 
     from gat.cli import main
     main(["hire", "--rd", rd_path, "--output", crew_path])
@@ -150,7 +150,7 @@ def test_cli_run_roundtrip(tmp_path, monkeypatch):
 
     m = mock.Mock(return_value="DONE")
     monkeypatch.setattr("gat.phases.execution_phase.run", m)
-    monkeypatch.setattr("gat.config_loader.load_models", lambda p: MODELS)
+    monkeypatch.setattr("gat.config_loader.load_models", lambda p, preset=None: MODELS)
 
     from gat.cli import main
     main(["run", "--rd", rd_path, "--crew", crew_path])

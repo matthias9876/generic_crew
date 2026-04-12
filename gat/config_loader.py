@@ -1,15 +1,43 @@
 import yaml
-from typing import Dict
+from typing import Dict, Optional
 
-def load_models(path: str) -> dict:
-    """Load models.yaml and return the parsed dict."""
+
+def load_models(path: str, preset: Optional[str] = None) -> dict:
+    """Load models.yaml and return the parsed dict for the selected preset.
+
+    Supports two formats:
+    - Legacy flat: top-level 'models' key (no presets)
+    - Preset-based: top-level 'presets' key with named configurations
+
+    When preset-based, returns the sub-dict for the chosen preset,
+    which itself contains a 'models' key.
+    """
     with open(path, 'r') as f:
-        return yaml.safe_load(f)
+        data = yaml.safe_load(f)
+
+    # Legacy format: { models: { large: ..., dev: ..., tester: ... } }
+    if 'presets' not in data:
+        return data
+
+    # Preset format
+    presets = data['presets']
+    if preset is None:
+        preset = data.get('default_preset')
+    if preset is None:
+        preset = next(iter(presets))  # first preset as fallback
+
+    if preset not in presets:
+        available = ', '.join(presets.keys())
+        raise ValueError(f"Unknown preset '{preset}'. Available: {available}")
+
+    return presets[preset]
+
 
 def load_crew(path: str) -> dict:
     """Load a crew YAML file and return the parsed dict."""
     with open(path, 'r') as f:
         return yaml.safe_load(f)
+
 
 def validate_crew(data: dict, models: dict) -> None:
     """Raise ValueError with a descriptive message if the crew dict is invalid."""
