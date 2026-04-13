@@ -5,14 +5,21 @@ from gat import config_loader, work_log
 from crewai import Crew, Agent, Task, Process, LLM
 
 
-def run(rd_path: str, models: Dict, log_dir: str, output_path: str) -> str:
+def run(rd_path: str, models: Dict, log_dir: str, output_path: str,
+        pipeline_cfg: dict = None) -> str:
     if not os.path.isfile(rd_path):
         raise FileNotFoundError(f"Requirements document not found: {rd_path}")
 
     with open(rd_path, 'r', encoding='utf-8') as f:
         requirements_content = f.read()
 
-    llm = LLM(model=models['models']['large'])
+    if pipeline_cfg is None:
+        pipeline_cfg = config_loader._DEFAULT_CONFIG
+    req_cfg = pipeline_cfg.get('requirements', {})
+    max_lines = req_cfg.get('max_lines_per_task', 150)
+    max_tasks = req_cfg.get('max_tasks', 20)
+
+    llm = config_loader.make_llm(models, 'requirements')
 
     senior_consultant = Agent(
         role="Senior Consultant",
@@ -22,8 +29,8 @@ def run(rd_path: str, models: Dict, log_dir: str, output_path: str) -> str:
     )
     requirements_engineer = Agent(
         role="Requirements Engineer",
-        goal="Find ambiguities, ask clarification questions, and suggest improvements to the requirements.",
-        backstory="A requirements engineering expert who ensures requirements are clear and actionable.",
+        goal="Break requirements into small, implementable tasks with clear contracts.",
+        backstory="A requirements engineering expert who ensures each task is scoped, testable, and well-defined.",
         llm=llm,
     )
 
@@ -37,22 +44,34 @@ def run(rd_path: str, models: Dict, log_dir: str, output_path: str) -> str:
         expected_output="A feasibility assessment with risk analysis and a clear recommendation.",
         agent=senior_consultant,
     )
-    requirements_task = Task(
+    breakdown_task = Task(
         description=(
-            f"Requirements analysis of the following document:\n\n"
+            f"Analyse the following requirements document and break it down into "
+            f"small, concrete implementation tasks.\n\n"
             f"{requirements_content}\n\n"
-            f"Identify ambiguities, ask clarification questions, and suggest improvements."
+            f"Rules for the task breakdown:\n"
+            f"- Each task MUST produce at most {max_lines} lines of code.\n"
+            f"- Generate at most {max_tasks} tasks.\n"
+            f"- Each task must specify: name, description, input contract "
+            f"(what it receives from prior tasks), output contract "
+            f"(what it produces for subsequent tasks), and acceptance criteria.\n"
+            f"- Order tasks by dependency — earlier tasks must not depend on later ones.\n"
+            f"- The final task must always be 'integration-test' that validates all "
+            f"pieces work together.\n"
+            f"- Include a 'write-documentation' task as the second-to-last task.\n\n"
+            f"Output a numbered list of tasks in Markdown."
         ),
         expected_output=(
-            "A structured analysis with sections: "
-            "clarification_questions (list) and suggested_improvements (text)."
+            "A numbered Markdown list of tasks, each with: name, description, "
+            "input_contract, output_contract, acceptance_criteria. "
+            f"Each task ≤ {max_lines} lines of code. Max {max_tasks} tasks."
         ),
         agent=requirements_engineer,
     )
 
     crew = Crew(
         agents=[senior_consultant, requirements_engineer],
-        tasks=[feasibility_task, requirements_task],
+        tasks=[feasibility_task, breakdown_task],
         process=Process.sequential,
         verbose=True,
     )
@@ -60,15 +79,15 @@ def run(rd_path: str, models: Dict, log_dir: str, output_path: str) -> str:
     result = crew.kickoff()
 
     feasibility_output = result.tasks_output[0].raw if result.tasks_output else ""
-    requirements_output = result.tasks_output[1].raw if len(result.tasks_output) > 1 else ""
+    breakdown_output = result.tasks_output[1].raw if len(result.tasks_output) > 1 else ""
 
     review_md = f"""# Requirements Review
 
 ## Feasibility Assessment
 {feasibility_output}
 
-## Clarification Questions & Suggested Improvements
-{requirements_output}
+## Task Breakdown
+{breakdown_output}
 """
     out_dir = os.path.dirname(output_path)
     if out_dir:
@@ -89,10 +108,10 @@ def run(rd_path: str, models: Dict, log_dir: str, output_path: str) -> str:
         log_dir=log_dir,
         phase="requirements",
         agent_name="Requirements Engineer",
-        task_description="Requirements analysis: identify ambiguities, clarification questions, and suggest improvements.",
+        task_description="Task breakdown with contracts and size limits.",
         assigned_by="system",
         thoughts="N/A",
-        result=str(requirements_output),
+        result=str(breakdown_output),
     )
 
     return os.path.abspath(output_path)

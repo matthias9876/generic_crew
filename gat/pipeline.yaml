@@ -1,0 +1,28 @@
+# GAT Pipeline Configuration
+# Controls iteration limits, timeouts, and task constraints.
+# All limits are tuned for a ~2h total pipeline run on local LLMs.
+
+# --- Task generation constraints (requirements phase) ---
+requirements:
+  max_lines_per_task: 150          # max lines of code per generated task
+  max_tasks: 20                    # cap on number of tasks the breakdown can produce
+
+# --- Execution iteration limits ---
+execution:
+  max_coding_critic_cycles: 3      # rounds of [coding → critics] before moving on
+  max_integration_retries: 2       # rounds of [integration-test → re-code+critics]
+  max_total_iterations: 5          # hard ceiling across all iteration types combined
+
+# --- Per-task timeouts (seconds) ---
+timeouts:
+  coding_task: 300                 # 5 min per coding task
+  critic_task: 180                 # 3 min per critic review
+  integration_task: 300            # 5 min per integration test run
+  documentation_task: 300          # 5 min for documentation generation
+  requirements_task: 300           # 5 min for requirements analysis
+  hiring_task: 300                 # 5 min for crew generation
+
+# --- Tool execution limits ---
+tools:
+  shell_timeout: 120               # seconds per shell command
+  python_timeout: 120              # seconds per python_repl execution

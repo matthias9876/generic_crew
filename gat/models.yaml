@@ -1,24 +1,47 @@
-# GAT model registry
-# Two presets: "gpu" (fast, fits 12GB VRAM) and "precise" (slower, uses 64GB main memory)
+# GAT Model Registry
+# Two presets: "gpu" (fast, everything in 12GB VRAM) and "mixed" (complex on 35b, coding on GPU)
+#
+# Roles:
+#   requirements - requirements analysis & task breakdown
+#   coder        - implementation (code generation, fixes)
+#   critic       - code review, architecture checks
+#   tester       - integration test generation & execution
+#   writer       - technical documentation
 #
 # Usage:
-#   python -m gat requirements --rd reqs.md --preset gpu      # fast, GPU-bound
-#   python -m gat requirements --rd reqs.md --preset precise   # slow, CPU/RAM-bound
+#   python -m gat pipeline --rd reqs.md --preset gpu      # fast, GPU-only
+#   python -m gat pipeline --rd reqs.md --preset mixed    # quality, CPU+GPU
 
 presets:
   gpu:
-    # Fits in 12GB GPU VRAM — fast inference, less accurate
+    # Everything fits in 12 GB VRAM — fast inference
     models:
-      large:  "ollama/qwen3.5:9b-ctx16k"
-      dev:    "ollama/qwen3.5:2b"
-      tester: "ollama/mistral:latest"
+      requirements: "ollama/qwen3.5:9b-ctx16k"
+      coder:        "ollama/qwen2.5-coder:7b"
+      critic:       "ollama/qwen3.5:9b-ctx16k"
+      tester:       "ollama/qwen2.5-coder:7b"
+      writer:       "ollama/qwen3.5:9b-ctx16k"
+    context:
+      requirements: 16384
+      coder:        16384
+      critic:       16384
+      tester:       8192
+      writer:       16384
 
-  precise:
-    # Uses 64GB main memory — slower but more capable
+  mixed:
+    # Complex reasoning on 35b (CPU+GPU), coding/testing on GPU-only models
     models:
-      large:  "ollama/qwen3.5:35b-ctx32k"
-      dev:    "ollama/qwen3.5:9b-ctx16k"
-      tester: "ollama/mistral:ctx16k"
+      requirements: "ollama/qwen3.5:35b-ctx32k"
+      coder:        "ollama/qwen2.5-coder:14b"
+      critic:       "ollama/qwen2.5-coder:14b"
+      tester:       "ollama/qwen2.5-coder:14b"
+      writer:       "ollama/qwen3.5:35b-ctx32k"
+    context:
+      requirements: 32768
+      coder:        16384
+      critic:       16384
+      tester:       16384
+      writer:       32768
 
 # Default preset when --preset is not specified
 default_preset: gpu

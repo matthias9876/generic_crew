@@ -11,11 +11,13 @@ You are the Hiring Manager for an AI crew. Read the requirements below and produ
 a YAML document that defines the agents and tasks needed to fulfil the project.
 
 Rules:
-- Each agent needs: name, role, goal, backstory, model (one of: large, dev, tester), tools (list; valid: shell, python_repl).
+- Each agent needs: name, role, goal, backstory, model (one of: coder, critic, tester, writer), tools (list; valid: shell, python_repl).
 - Each task needs: name, description, expected_output, agent (must reference an agent name).
-- Only assign tools to agents that need to execute code.
-- Always include a Technical Author agent (model: large, no tools) with a write_documentation task as the second-to-last task.
-- Always include an integration-test task as the final task, assigned to a Tester agent.
+- Only assign tools to agents that need to execute code (coder, tester).
+- The critic agent reviews code — it does NOT get tools.
+- The writer agent produces documentation — it does NOT get tools.
+- Always include a Technical Author agent (model: writer, no tools) with a write_documentation task as the SECOND-TO-LAST task.
+- Always include an integration-test task as the FINAL task, assigned to a Tester agent.
 - Output ONLY a valid YAML block (no explanatory text outside the YAML).
 
 Top-level keys must be "agents" (list) and "tasks" (list).
@@ -32,8 +34,7 @@ def run(rd_path: str, models: Dict, log_dir: str, output_yaml_path: str) -> str:
     with open(rd_path, 'r', encoding='utf-8') as f:
         requirements = f.read()
 
-    model_string = models['models']['large']
-    llm = LLM(model=model_string)
+    llm = config_loader.make_llm(models, 'requirements')
 
     hiring_manager = Agent(
         role="Hiring Manager",
@@ -58,7 +59,7 @@ def run(rd_path: str, models: Dict, log_dir: str, output_yaml_path: str) -> str:
     )
 
     last_error = None
-    for attempt in range(2):
+    for attempt in range(3):
         result = crew.kickoff()
         crew_yaml_str = result.raw if hasattr(result, 'raw') else str(result)
 
@@ -95,4 +96,4 @@ def run(rd_path: str, models: Dict, log_dir: str, output_yaml_path: str) -> str:
         except Exception as e:
             last_error = e
 
-    raise ValueError(f"Crew YAML validation failed after 2 attempts: {last_error}")
+    raise ValueError(f"Crew YAML validation failed after 3 attempts: {last_error}")

@@ -1,0 +1,111 @@
+# ──────────────────────────────────────────────────────────────────────────────
+# GAT Configuration
+# Single file for model presets, pipeline limits, and timeouts.
+# Tuned for a max ~2 h end-to-end run on local LLMs.
+# ──────────────────────────────────────────────────────────────────────────────
+
+# ── Model presets ─────────────────────────────────────────────────────────────
+# Each preset maps a *role* to an Ollama model string + context window.
+# Roles used by the pipeline:
+#   requirements  – requirements analysis & task breakdown
+#   coder         – implementation (code generation, bug fixes)
+#   critic        – code review, architecture fitness checks
+#   tester        – integration-test generation & execution
+#   writer        – technical documentation (always runs last)
+
+presets:
+  fast:
+    # Smallest models, all GPU — for quick smoke-tests / trivial tasks
+    # requirements/hiring use 9b for reliable YAML generation
+    models:
+      requirements: "ollama/qwen3.5:9b-ctx16k"
+      coder:        "ollama/qwen3.5:2b"
+      critic:       "ollama/qwen3.5:2b"
+      tester:       "ollama/qwen3.5:2b"
+      writer:       "ollama/qwen3.5:2b"
+    context:
+      requirements: 16384
+      coder:        8192
+      critic:       8192
+      tester:       8192
+      writer:       8192
+
+  gpu:
+    # Everything fits in 12 GB VRAM — fast inference
+    models:
+      requirements: "ollama/qwen3.5:9b-ctx16k"
+      coder:        "ollama/qwen2.5-coder:7b"
+      critic:       "ollama/qwen3.5:9b-ctx16k"
+      tester:       "ollama/qwen2.5-coder:7b"
+      writer:       "ollama/qwen3.5:9b-ctx16k"
+    context:
+      requirements: 16384
+      coder:        16384
+      critic:       16384
+      tester:       8192
+      writer:       16384
+
+  mixed:
+    # Complex reasoning on 35 b (CPU+GPU offload), coding on GPU-only models
+    models:
+      requirements: "ollama/qwen3.5:35b-ctx32k"
+      coder:        "ollama/qwen2.5-coder:14b"
+      critic:       "ollama/qwen2.5-coder:14b"
+      tester:       "ollama/qwen2.5-coder:14b"
+      writer:       "ollama/qwen3.5:35b-ctx32k"
+    context:
+      requirements: 32768
+      coder:        16384
+      critic:       16384
+      tester:       16384
+      writer:       32768
+
+default_preset: gpu
+
+# ── Requirements phase ────────────────────────────────────────────────────────
+requirements:
+  max_lines_per_task: 150        # LLM must break work into tasks ≤ this size
+  max_tasks: 20                  # upper bound on generated task count
+
+# ── Pipeline execution loop ───────────────────────────────────────────────────
+#
+#  The execution phase runs the following fixed loop:
+#
+#    ┌──────────────────────────────────────────────────────────┐
+#    │  for each coding task from the requirements breakdown:   │
+#    │    1. CODING  — coder implements the task                │
+#    │    2. CRITICS — critic reviews; may set verdict:         │
+#    │         "pass"    → move to next task                    │
+#    │         "rework"  → loop back to CODING (same task)      │
+#    │  after ALL coding tasks pass critics:                    │
+#    │    3. INTEGRATION TEST — tester runs cross-task tests    │
+#    │         "pass"    → proceed to documentation             │
+#    │         "fail"    → loop back to CODING step 1           │
+#    │                     (full re-execution including critics) │
+#    │  4. DOCUMENTATION — writer produces docs (always last)   │
+#    └──────────────────────────────────────────────────────────┘
+#
+#  The LLM (critic / tester) decides the verdict.
+#  The limits below are hard caps that override the LLM's decision.
+
+execution:
+  max_coding_critic_cycles: 3    # max rework loops per task (coding↔critics)
+  max_integration_retries: 2     # max times integration-test can restart the
+                                 # full coding+critics loop
+  max_total_iterations: 5        # hard ceiling: sum of all coding+critic+
+                                 # integration rounds; pipeline stops here
+                                 # regardless of LLM verdict
+
+# ── Per-step timeouts (seconds) ──────────────────────────────────────────────
+timeouts:
+  requirements_task: 300         # 5 min – requirements analysis
+  hiring_task: 300               # 5 min – crew YAML generation
+  coding_task: 300               # 5 min – one coding task
+  critic_task: 180               # 3 min – one critic review
+  integration_task: 300          # 5 min – integration test run
+  documentation_task: 300        # 5 min – documentation generation
+
+# ── Tool limits ──────────────────────────────────────────────────────────────
+tools:
+  shell_timeout: 120             # seconds per shell command
+  python_timeout: 120            # seconds per python_repl execution
