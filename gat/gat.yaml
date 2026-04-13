@@ -4,6 +4,35 @@
 # Tuned for a max ~2 h end-to-end run on local LLMs.
 # ──────────────────────────────────────────────────────────────────────────────
 
+# ── Ollama instances ───────────────────────────────────────────────────────────
+# Named Ollama endpoints.  Reference them by name in preset role blocks.
+#
+# Fields per instance:
+#   host      – hostname or IP (required)
+#   port      – TCP port (required)
+#   username  – HTTP Basic-Auth username (omit if no auth)
+#   password  – HTTP Basic-Auth password (omit if no auth)
+#
+# Example — add as many instances as you like:
+#
+# ollama_instances:
+#   local:
+#     host: localhost
+#     port: 11434
+#   workstation:
+#     host: 10.17.90.127
+#     port: 8443
+#     username: admin
+#     password: "aF7t..."
+
+ollama_instances:
+  local:
+    host: localhost
+    port: 11434
+
+# Default instance used when a role does not specify one.
+default_instance: local
+
 # ── Model presets ─────────────────────────────────────────────────────────────
 # Each preset maps a *role* to an Ollama model string + context window.
 # Roles used by the pipeline:
@@ -12,6 +41,9 @@
 #   critic        – code review, architecture fitness checks
 #   tester        – integration-test generation & execution
 #   writer        – technical documentation (always runs last)
+#
+# Each role can optionally specify an instance name:
+#   instance: workstation   ← overrides default_instance for this role
 
 presets:
   fast:
@@ -44,6 +76,32 @@ presets:
       critic:       16384
       tester:       8192
       writer:       16384
+
+  workstation_best:
+    # Best available models split across both workstations for parallel use.
+    # workstation  (10.17.90.110) — qwen2.5-coder:7b  → critic only (no tool support needed for review)
+    # workstation2 (10.17.90.100) — qwen3:30b-a3b MoE → everything that needs tools or strong reasoning
+    #
+    # Parallelism: critic runs on workstation while coder/tester run on workstation2.
+    models:
+      requirements: "ollama/qwen3:30b-a3b-instruct-2507-q4_K_M"
+      coder:        "ollama/qwen3-coder:30b-a3b-q4_K_M"
+      critic:       "ollama/qwen2.5-coder:7b"
+      tester:       "ollama/qwen3-coder:30b-a3b-q4_K_M"
+      writer:       "ollama/qwen3:30b-a3b-instruct-2507-q4_K_M"
+    context:
+      requirements: 32768
+      coder:        32768
+      critic:       16384
+      tester:       32768
+      writer:       32768
+    instances:
+      requirements: workstation2
+      coder:        workstation2
+      critic:       workstation
+      tester:       workstation2
+      writer:       workstation2
+
 
   mixed:
     # Complex reasoning on 35 b (CPU+GPU offload), coding on GPU-only models

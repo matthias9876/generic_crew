@@ -5,7 +5,7 @@ import subprocess
 from typing import Dict, List
 
 from gat import config_loader, work_log
-from crewai import Crew, Agent, Task, Process, LLM
+from crewai import Crew, Agent, Task, Process
 from crewai.tools import BaseTool
 
 
@@ -99,10 +99,10 @@ def _classify_tasks(tasks: list) -> dict:
     }
 
 
-def _build_agent(agent_def: dict, models: dict, tool_map: dict) -> Agent:
+def _build_agent(agent_def: dict, models: dict, tool_map: dict,
+                 config: dict = None) -> Agent:
     model_alias = agent_def['model']
-    model_str = models['models'][model_alias]
-    llm = LLM(model=model_str)
+    llm = config_loader.make_llm(models, model_alias, config=config)
     tools = []
     for t in agent_def.get('tools', []):
         if t in tool_map:
@@ -169,7 +169,7 @@ def _parse_integration_verdict(output: str) -> str:
 # Main entry point
 # ---------------------------------------------------------------------------
 
-def run(rd_path: str, crew_yaml_path: str, models: dict, log_dir: str,
+def run(rd_path: str, crew_yaml_path: str, models: dict, run_dir: str,
         pipeline_cfg: dict = None) -> str:
     """Execute the iterative pipeline:
     [coding → critics]×N → [integration-test → re-run]×M → documentation (always last).
@@ -194,8 +194,10 @@ def run(rd_path: str, crew_yaml_path: str, models: dict, log_dir: str,
     with open(rd_path, 'r', encoding='utf-8') as f:
         req_content = f.read().strip()
 
-    # 4. Create shared venv & tools
-    venv_dir = os.path.join(log_dir, 'venv')
+    # 4. Create shared venv & tools inside run_dir
+    os.makedirs(run_dir, exist_ok=True)
+    log_dir = os.path.join(run_dir, "logs")
+    venv_dir = os.path.join(run_dir, 'venv')
     env = _create_shared_venv(venv_dir)
 
     shell_tool = ShellTool(env=env, timeout=shell_timeout)
@@ -205,7 +207,8 @@ def run(rd_path: str, crew_yaml_path: str, models: dict, log_dir: str,
     # 5. Build agents
     agent_objs = {}
     for agent_def in crew_dict['agents']:
-        agent_objs[agent_def['name']] = _build_agent(agent_def, models, tool_map)
+        agent_objs[agent_def['name']] = _build_agent(agent_def, models, tool_map,
+                                                      config=pipeline_cfg)
 
     # 6. Classify tasks
     classified = _classify_tasks(crew_dict['tasks'])

@@ -1,0 +1,25 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python3 -m gat --config gat/gat.yaml gat/gat.local.yaml --preset fast requirements --rd tasks/task_calculator.md --output tasks/calculator_review.md --logs logs/)",
+      "Bash(curl -sk --max-time 10 -u \"admin:aF7tmUgTvF4l2FPj0EBEFHsLgaUpHZpxo8LkNL9x\" https://10.17.90.110:8443/api/tags)",
+      "Bash(curl -sk --max-time 10 -u \"admin:aF7tmUgTvF4l2FPj0EBEFHsLgaUpHZpxo8LkNL9x\" https://10.17.90.110:8443/api/show -d '{\"name\":\"gemma3:4b\"}')",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(d.get\\('modelinfo',{}\\).get\\('general.context_length'\\) or 'not found'\\); [print\\(k,':',v\\) for k,v in d.get\\('modelinfo',{}\\).items\\(\\) if 'context' in k.lower\\(\\) or 'ctx' in k.lower\\(\\)]\")",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); info=d.get\\('modelinfo',{}\\); [print\\(k,':',v\\) for k,v in info.items\\(\\)]\")",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(json.dumps\\(d, indent=2\\)\\)\")",
+      "Bash(python3 -c ':*)",
+      "Bash(python3 -c \"from crewai import LLM; import inspect; sig = inspect.signature\\(LLM.__init__\\); print\\([p for p in sig.parameters]\\)\")",
+      "Read(//home/d026266/.local/lib/python3.12/site-packages/crewai/llms/providers/openai/**)",
+      "Bash(python3 -m gat --config gat/gat.yaml gat/gat.local.yaml --preset workstation_small requirements --rd tasks/task_calculator.md --output tasks/calculator_review.md --logs logs/)",
+      "Bash(python3 -m gat --config gat/gat.yaml gat/gat.local.yaml --preset workstation_small run --rd tasks/task_calculator.md --crew tasks/calculator_crew.yaml --logs logs/)",
+      "Bash(awk '/^## Run/{entry=$0; body=\"\"} {body=body\"\\\\n\"$0} END{print body}' logs/execution/coder.md)",
+      "Bash(xargs ls:*)",
+      "Bash(curl -sk --max-time 20 -u admin:aF7tmUgTvF4l2FPj0EBEFHsLgaUpHZpxo8LkNL9x https://10.17.90.100:8443/api/chat -H 'Content-Type: application/json' -d '{\"model\":\"qwen3-coder:30b-a3b-q4_K_M\",\"messages\":[{\"role\":\"user\",\"content\":\"Run ls /tmp\"}],\"tools\":[{\"type\":\"function\",\"function\":{\"name\":\"shell\",\"description\":\"run shell\",\"parameters\":{\"type\":\"object\",\"properties\":{\"command\":{\"type\":\"string\"}}}}}],\"stream\":false}')",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); m=d.get\\('message',{}\\); print\\('tool_calls:', bool\\(m.get\\('tool_calls'\\)\\)\\); print\\(json.dumps\\(m.get\\('tool_calls'\\), indent=2\\) if m.get\\('tool_calls'\\) else m.get\\('content',''\\)[:200]\\)\")",
+      "Bash(chmod +x /home/d026266/workspace/github.com/matthias9876/generic_crew/scripts/run_e2e.sh)",
+      "Bash(python3 -m pytest tests/test_cli.py::test_run_dir_is_auto_generated -v)",
+      "Bash(python3 -m pytest tests/ -v --ignore=tests/test_models_yaml.py)",
+      "Bash(python3 -m pytest tests/test_models_yaml.py -v)"
+    ]
+  }
+}

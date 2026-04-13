@@ -1,17 +1,34 @@
 import os
+import shutil
 from typing import Dict
 from gat import config_loader, work_log
 
-from crewai import Crew, Agent, Task, Process, LLM
+from crewai import Crew, Agent, Task, Process
 
 
-def run(rd_path: str, models: Dict, log_dir: str, output_path: str,
+def run(rd_path: str, models: Dict, run_dir: str,
         pipeline_cfg: dict = None) -> str:
+    """Run the requirements review phase.
+
+    Writes to run_dir:
+      - requirements.md          copy of the original requirements document
+      - review.md                feasibility + task breakdown (LLM output)
+      - requirements_reviewed.md merged doc the user can edit and re-feed
+
+    Logs go to run_dir/logs/requirements/.
+    Returns the absolute path of requirements_reviewed.md.
+    """
     if not os.path.isfile(rd_path):
         raise FileNotFoundError(f"Requirements document not found: {rd_path}")
 
+    os.makedirs(run_dir, exist_ok=True)
+    log_dir = os.path.join(run_dir, "logs")
+
     with open(rd_path, 'r', encoding='utf-8') as f:
         requirements_content = f.read()
+
+    # Copy original requirements into the run directory
+    shutil.copy2(rd_path, os.path.join(run_dir, "requirements.md"))
 
     if pipeline_cfg is None:
         pipeline_cfg = config_loader._DEFAULT_CONFIG
@@ -19,7 +36,7 @@ def run(rd_path: str, models: Dict, log_dir: str, output_path: str,
     max_lines = req_cfg.get('max_lines_per_task', 150)
     max_tasks = req_cfg.get('max_tasks', 20)
 
-    llm = config_loader.make_llm(models, 'requirements')
+    llm = config_loader.make_llm(models, 'requirements', config=pipeline_cfg)
 
     senior_consultant = Agent(
         role="Senior Consultant",
@@ -81,6 +98,7 @@ def run(rd_path: str, models: Dict, log_dir: str, output_path: str,
     feasibility_output = result.tasks_output[0].raw if result.tasks_output else ""
     breakdown_output = result.tasks_output[1].raw if len(result.tasks_output) > 1 else ""
 
+    # review.md — raw LLM output, structured for later phases
     review_md = f"""# Requirements Review
 
 ## Feasibility Assessment
@@ -89,11 +107,36 @@ def run(rd_path: str, models: Dict, log_dir: str, output_path: str,
 ## Task Breakdown
 {breakdown_output}
 """
-    out_dir = os.path.dirname(output_path)
-    if out_dir:
-        os.makedirs(out_dir, exist_ok=True)
-    with open(output_path, 'w', encoding='utf-8') as f:
+    review_path = os.path.join(run_dir, "review.md")
+    with open(review_path, 'w', encoding='utf-8') as f:
         f.write(review_md)
+
+    # requirements_reviewed.md — original + consultant questions/improvements inlined
+    # The user can edit this file and pass it as --rd to the next run.
+    reviewed_md = f"""# Requirements (Reviewed)
+
+> This file merges your original requirements with the consultant's analysis.
+> Edit this file to address questions and improvements, then pass it as --rd to the next phase.
+
+---
+
+## Original Requirements
+
+{requirements_content}
+
+---
+
+## Consultant Feedback
+
+### Feasibility Assessment
+{feasibility_output}
+
+### Suggested Task Breakdown
+{breakdown_output}
+"""
+    reviewed_path = os.path.join(run_dir, "requirements_reviewed.md")
+    with open(reviewed_path, 'w', encoding='utf-8') as f:
+        f.write(reviewed_md)
 
     work_log.append_run(
         log_dir=log_dir,
@@ -112,6 +155,7 @@ def run(rd_path: str, models: Dict, log_dir: str, output_path: str,
         assigned_by="system",
         thoughts="N/A",
         result=str(breakdown_output),
+        produced_files=[os.path.abspath(reviewed_path)],
     )
 
-    return os.path.abspath(output_path)
+    return os.path.abspath(reviewed_path)
