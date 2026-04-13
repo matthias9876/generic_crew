@@ -16,7 +16,12 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 # Defaults
 PRESET="${PRESET:-fast}"
 RD="${RD:-${REPO_ROOT}/tasks/task_calculator.md}"
-CONFIG="${CONFIG:-${REPO_ROOT}/gat/gat.yaml}"
+# Support space-separated list of config files; local override loaded if it exists
+_DEFAULT_CONFIGS="${REPO_ROOT}/gat/gat.yaml"
+if [[ -f "${REPO_ROOT}/gat.local.yaml" ]]; then
+  _DEFAULT_CONFIGS="${_DEFAULT_CONFIGS} ${REPO_ROOT}/gat.local.yaml"
+fi
+CONFIG="${CONFIG:-${_DEFAULT_CONFIGS}}"
 
 # --- Parse args ---
 while [[ $# -gt 0 ]]; do
@@ -52,8 +57,9 @@ cd "$REPO_ROOT"
 
 # --- Phase 1: requirements ---
 echo ">>> Phase 1/3: requirements"
-python -m gat \
-  --config "$CONFIG" \
+# shellcheck disable=SC2086  # CONFIG is intentionally word-split for multi-file support
+python3 -m gat \
+  --config $CONFIG \
   --preset "$PRESET" \
   --run-dir "$RUN_DIR" \
   requirements \
@@ -71,8 +77,9 @@ done
 # --- Phase 2: hire (use the reviewed requirements) ---
 echo ""
 echo ">>> Phase 2/3: hire"
-python -m gat \
-  --config "$CONFIG" \
+# shellcheck disable=SC2086
+python3 -m gat \
+  --config $CONFIG \
   --preset "$PRESET" \
   --run-dir "$RUN_DIR" \
   hire \
@@ -87,8 +94,9 @@ echo "  OK: crew.yaml"
 # --- Phase 3: execute ---
 echo ""
 echo ">>> Phase 3/3: execute"
-python -m gat \
-  --config "$CONFIG" \
+# shellcheck disable=SC2086
+python3 -m gat \
+  --config $CONFIG \
   --preset "$PRESET" \
   --run-dir "$RUN_DIR" \
   run \
