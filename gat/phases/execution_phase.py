@@ -25,11 +25,14 @@ class ShellTool(BaseTool):
         object.__setattr__(self, '_timeout', timeout)
 
     def _run(self, command: str) -> str:
-        result = subprocess.run(
-            command, shell=True, capture_output=True, text=True,
-            timeout=self._timeout, env=self._env,
-        )
-        return result.stdout + result.stderr
+        try:
+            result = subprocess.run(
+                command, shell=True, capture_output=True, text=True,
+                timeout=self._timeout, env=self._env,
+            )
+            return result.stdout + result.stderr
+        except subprocess.TimeoutExpired:
+            return f"ERROR: Command timed out after {self._timeout}s: {command[:120]}"
 
 
 class PythonREPLTool(BaseTool):
@@ -47,12 +50,15 @@ class PythonREPLTool(BaseTool):
         python = os.path.join(self._env.get('VIRTUAL_ENV', ''), 'bin', 'python3')
         if not os.path.isfile(python):
             python = sys.executable
-        result = subprocess.run(
-            [python, '-c', code],
-            capture_output=True, text=True,
-            timeout=self._timeout, env=self._env,
-        )
-        return result.stdout + result.stderr
+        try:
+            result = subprocess.run(
+                [python, '-c', code],
+                capture_output=True, text=True,
+                timeout=self._timeout, env=self._env,
+            )
+            return result.stdout + result.stderr
+        except subprocess.TimeoutExpired:
+            return f"ERROR: Python execution timed out after {self._timeout}s"
 
 
 # ---------------------------------------------------------------------------
@@ -127,8 +133,13 @@ def _run_single_task(task_def: dict, agent: Agent, context: str = "") -> str:
         process=Process.sequential,
         verbose=True,
     )
-    result = crew.kickoff()
-    return result.raw if hasattr(result, 'raw') else str(result)
+    try:
+        result = crew.kickoff()
+        return result.raw if hasattr(result, 'raw') else str(result)
+    except Exception as e:
+        error_msg = f"TASK FAILED: {type(e).__name__}: {e}"
+        print(f"[execution_phase] {error_msg}", flush=True)
+        return error_msg
 
 
 _CRITIC_VERDICT_PASS = "PASS"
