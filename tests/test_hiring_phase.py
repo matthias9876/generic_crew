@@ -63,82 +63,82 @@ def _mock_result(raw_text):
     return result
 
 
-@patch("gat.phases.hiring_phase.LLM", MagicMock)
-@patch("gat.phases.hiring_phase.Agent", MagicMock)
-@patch("gat.phases.hiring_phase.Task", MagicMock)
 @patch("gat.phases.hiring_phase.Crew")
-def test_happy_path_writes_yaml(mock_crew, tmp_path):
+@patch("gat.phases.hiring_phase.Task", MagicMock)
+@patch("gat.phases.hiring_phase.Agent", MagicMock)
+@patch("gat.config_loader.make_llm", return_value=MagicMock())
+def test_happy_path_writes_yaml(mock_llm, mock_crew, tmp_path):
     mock_crew.return_value.kickoff.return_value = _mock_result(VALID_CREW_YAML)
     rd_path = make_temp_file(tmp_path, "Build a calculator")
-    output = str(tmp_path / "crew.yaml")
+    run_dir = str(tmp_path / "run")
     from gat.phases import hiring_phase
-    result = hiring_phase.run(rd_path, MODELS, str(tmp_path / "logs"), output)
-    assert result == os.path.abspath(output)
-    assert os.path.exists(output)
-    data = yaml.safe_load(open(output))
+    result = hiring_phase.run(rd_path, MODELS, run_dir)
+    crew_yaml = os.path.join(run_dir, "crew.yaml")
+    assert result == os.path.abspath(crew_yaml)
+    assert os.path.exists(crew_yaml)
+    data = yaml.safe_load(open(crew_yaml))
     assert "agents" in data
     assert "tasks" in data
 
 
-@patch("gat.phases.hiring_phase.LLM", MagicMock)
-@patch("gat.phases.hiring_phase.Agent", MagicMock)
-@patch("gat.phases.hiring_phase.Task", MagicMock)
 @patch("gat.phases.hiring_phase.Crew")
-def test_strips_markdown_fences(mock_crew, tmp_path):
+@patch("gat.phases.hiring_phase.Task", MagicMock)
+@patch("gat.phases.hiring_phase.Agent", MagicMock)
+@patch("gat.config_loader.make_llm", return_value=MagicMock())
+def test_strips_markdown_fences(mock_llm, mock_crew, tmp_path):
     fenced = "```yaml\n" + VALID_CREW_YAML + "\n```"
     mock_crew.return_value.kickoff.return_value = _mock_result(fenced)
     rd_path = make_temp_file(tmp_path, "Build a calculator")
-    output = str(tmp_path / "crew.yaml")
+    run_dir = str(tmp_path / "run")
     from gat.phases import hiring_phase
-    result = hiring_phase.run(rd_path, MODELS, str(tmp_path / "logs"), output)
-    assert os.path.exists(output)
+    result = hiring_phase.run(rd_path, MODELS, run_dir)
+    assert os.path.exists(os.path.join(run_dir, "crew.yaml"))
 
 
-@patch("gat.phases.hiring_phase.LLM", MagicMock)
-@patch("gat.phases.hiring_phase.Agent", MagicMock)
-@patch("gat.phases.hiring_phase.Task", MagicMock)
 @patch("gat.phases.hiring_phase.Crew")
-def test_retries_on_invalid_yaml(mock_crew, tmp_path):
+@patch("gat.phases.hiring_phase.Task", MagicMock)
+@patch("gat.phases.hiring_phase.Agent", MagicMock)
+@patch("gat.config_loader.make_llm", return_value=MagicMock())
+def test_retries_on_invalid_yaml(mock_llm, mock_crew, tmp_path):
     good = _mock_result(VALID_CREW_YAML)
     bad = _mock_result("not: valid: crew: yaml")
     mock_crew.return_value.kickoff.side_effect = [bad, good]
     rd_path = make_temp_file(tmp_path, "Build a calculator")
-    output = str(tmp_path / "crew.yaml")
+    run_dir = str(tmp_path / "run")
     from gat.phases import hiring_phase
-    result = hiring_phase.run(rd_path, MODELS, str(tmp_path / "logs"), output)
-    assert os.path.exists(output)
+    result = hiring_phase.run(rd_path, MODELS, run_dir)
+    assert os.path.exists(os.path.join(run_dir, "crew.yaml"))
 
 
-@patch("gat.phases.hiring_phase.LLM", MagicMock)
-@patch("gat.phases.hiring_phase.Agent", MagicMock)
-@patch("gat.phases.hiring_phase.Task", MagicMock)
 @patch("gat.phases.hiring_phase.Crew")
-def test_raises_after_two_failures(mock_crew, tmp_path):
+@patch("gat.phases.hiring_phase.Task", MagicMock)
+@patch("gat.phases.hiring_phase.Agent", MagicMock)
+@patch("gat.config_loader.make_llm", return_value=MagicMock())
+def test_raises_after_two_failures(mock_llm, mock_crew, tmp_path):
     bad = _mock_result("garbage")
     mock_crew.return_value.kickoff.return_value = bad
     rd_path = make_temp_file(tmp_path, "Build a calculator")
-    output = str(tmp_path / "crew.yaml")
+    run_dir = str(tmp_path / "run")
     from gat.phases import hiring_phase
     with pytest.raises(ValueError, match="validation failed"):
-        hiring_phase.run(rd_path, MODELS, str(tmp_path / "logs"), output)
+        hiring_phase.run(rd_path, MODELS, run_dir)
 
 
 def test_missing_rd_raises(tmp_path):
     from gat.phases import hiring_phase
     with pytest.raises(FileNotFoundError):
-        hiring_phase.run("/nonexistent/rd.md", MODELS, str(tmp_path / "logs"), str(tmp_path / "crew.yaml"))
+        hiring_phase.run("/nonexistent/rd.md", MODELS, str(tmp_path / "run"))
 
 
-@patch("gat.phases.hiring_phase.LLM", MagicMock)
-@patch("gat.phases.hiring_phase.Agent", MagicMock)
-@patch("gat.phases.hiring_phase.Task", MagicMock)
 @patch("gat.phases.hiring_phase.Crew")
-def test_work_log_written(mock_crew, tmp_path):
+@patch("gat.phases.hiring_phase.Task", MagicMock)
+@patch("gat.phases.hiring_phase.Agent", MagicMock)
+@patch("gat.config_loader.make_llm", return_value=MagicMock())
+def test_work_log_written(mock_llm, mock_crew, tmp_path):
     mock_crew.return_value.kickoff.return_value = _mock_result(VALID_CREW_YAML)
     rd_path = make_temp_file(tmp_path, "Build a calculator")
-    log_dir = str(tmp_path / "logs")
-    output = str(tmp_path / "crew.yaml")
+    run_dir = str(tmp_path / "run")
     from gat.phases import hiring_phase
-    hiring_phase.run(rd_path, MODELS, log_dir, output)
-    log_phase_dir = os.path.join(log_dir, "hiring")
+    hiring_phase.run(rd_path, MODELS, run_dir)
+    log_phase_dir = os.path.join(run_dir, "logs", "hiring")
     assert os.path.isdir(log_phase_dir)

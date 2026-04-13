@@ -53,33 +53,32 @@ def _mock_kickoff_result(raw="RESULT", num_tasks=1):
 
 # --- Integration test 1: Full pipeline requirements → hire → run ---
 
-@patch("gat.phases.execution_phase.LLM", MagicMock)
+@patch("gat.phases.execution_phase.Crew")
 @patch("gat.phases.execution_phase.Agent", MagicMock)
 @patch("gat.phases.execution_phase.Task", MagicMock)
-@patch("gat.phases.execution_phase.Crew")
 @patch("gat.phases.execution_phase.config_loader")
 @patch("gat.phases.execution_phase.work_log")
-@patch("gat.phases.hiring_phase.LLM", MagicMock)
-@patch("gat.phases.hiring_phase.Agent", MagicMock)
-@patch("gat.phases.hiring_phase.Task", MagicMock)
 @patch("gat.phases.hiring_phase.Crew")
-@patch("gat.phases.requirements_phase.LLM", MagicMock)
-@patch("gat.phases.requirements_phase.Agent", MagicMock)
-@patch("gat.phases.requirements_phase.Task", MagicMock)
+@patch("gat.phases.hiring_phase.Task", MagicMock)
+@patch("gat.phases.hiring_phase.Agent", MagicMock)
 @patch("gat.phases.requirements_phase.Crew")
-def test_full_pipeline(mock_req_crew, mock_hire_crew,
+@patch("gat.phases.requirements_phase.Task", MagicMock)
+@patch("gat.phases.requirements_phase.Agent", MagicMock)
+@patch("gat.config_loader.make_llm", return_value=MagicMock())
+def test_full_pipeline(mock_llm, mock_req_crew, mock_hire_crew,
                        mock_exec_wl, mock_exec_cl, mock_exec_crew,
                        tmp_path):
+    run_dir = str(tmp_path / "run")
+
     # Phase 1: Requirements
     mock_req_crew.return_value.kickoff.return_value = _mock_kickoff_result("REQ_REVIEW", 2)
-
     rd_path = make_temp_file(tmp_path, "Build a calculator app", "requirements.md")
-    review_path = str(tmp_path / "review.md")
-    log_dir = str(tmp_path / "logs")
 
     from gat.phases import requirements_phase
-    req_result = requirements_phase.run(rd_path, MODELS, log_dir, review_path)
-    assert os.path.exists(req_result)
+    reviewed_path = requirements_phase.run(rd_path, MODELS, run_dir)
+    assert os.path.exists(reviewed_path)
+    assert os.path.exists(os.path.join(run_dir, "requirements.md"))
+    assert os.path.exists(os.path.join(run_dir, "review.md"))
 
     # Phase 2: Hiring
     crew_yaml_str = yaml.dump(VALID_CREW_YAML)
@@ -87,12 +86,10 @@ def test_full_pipeline(mock_req_crew, mock_hire_crew,
     hire_result_mock.raw = crew_yaml_str
     mock_hire_crew.return_value.kickoff.return_value = hire_result_mock
 
-    crew_path = str(tmp_path / "crew.yaml")
     from gat.phases import hiring_phase
-    hire_result = hiring_phase.run(rd_path, MODELS, log_dir, crew_path)
-    assert os.path.exists(hire_result)
+    crew_path = hiring_phase.run(reviewed_path, MODELS, run_dir)
+    assert os.path.exists(crew_path)
 
-    # Verify generated crew is valid
     with open(crew_path) as f:
         crew_data = yaml.safe_load(f)
     from gat.config_loader import validate_crew
@@ -104,57 +101,59 @@ def test_full_pipeline(mock_req_crew, mock_hire_crew,
         "tasks": [t.copy() for t in VALID_CREW_YAML["tasks"]],
     }
     mock_exec_cl.validate_crew.return_value = None
+    mock_exec_cl._DEFAULT_CONFIG = {}
     mock_exec_crew.return_value.kickoff.return_value = _mock_kickoff_result("DONE", 3)
 
     from gat.phases import execution_phase
-    exec_result = execution_phase.run(rd_path, crew_path, MODELS, log_dir)
-    assert exec_result == "DONE"
+    exec_result = execution_phase.run(rd_path, crew_path, MODELS, run_dir)
+    assert "iterations" in exec_result or "implement" in exec_result
 
 
-# --- Integration test 2: CLI round-trip ---
+# --- Integration test 2: CLI round-trips ---
 
 def test_cli_requirements_roundtrip(tmp_path, monkeypatch):
     from unittest import mock
     rd_path = make_temp_file(tmp_path, "Some requirements", "rd.md")
-    models_path = make_temp_file(tmp_path, yaml.dump(MODELS), "models.yaml")
-    output_path = str(tmp_path / "review.md")
+    run_dir = str(tmp_path / "run")
 
-    m = mock.Mock(return_value=output_path)
+    m = mock.Mock(return_value=os.path.join(run_dir, "requirements_reviewed.md"))
     monkeypatch.setattr("gat.phases.requirements_phase.run", m)
-    monkeypatch.setattr("gat.config_loader.load_models", lambda p, preset=None: MODELS)
 
     from gat.cli import main
-    main(["requirements", "--rd", rd_path, "--output", output_path,
-          "--models", models_path])
+    main(["--run-dir", run_dir, "requirements", "--rd", rd_path])
     m.assert_called_once()
+    assert m.call_args.kwargs["rd_path"] == rd_path
+    assert m.call_args.kwargs["run_dir"] == run_dir
 
 
 def test_cli_hire_roundtrip(tmp_path, monkeypatch):
     from unittest import mock
     rd_path = make_temp_file(tmp_path, "Some requirements", "rd.md")
-    crew_path = str(tmp_path / "crew.yaml")
+    run_dir = str(tmp_path / "run")
 
-    m = mock.Mock(return_value=crew_path)
+    m = mock.Mock(return_value=os.path.join(run_dir, "crew.yaml"))
     monkeypatch.setattr("gat.phases.hiring_phase.run", m)
-    monkeypatch.setattr("gat.config_loader.load_models", lambda p, preset=None: MODELS)
 
     from gat.cli import main
-    main(["hire", "--rd", rd_path, "--output", crew_path])
+    main(["--run-dir", run_dir, "hire", "--rd", rd_path])
     m.assert_called_once()
+    assert m.call_args.kwargs["rd_path"] == rd_path
 
 
 def test_cli_run_roundtrip(tmp_path, monkeypatch):
     from unittest import mock
     rd_path = make_temp_file(tmp_path, "Some requirements", "rd.md")
     crew_path = make_temp_file(tmp_path, "crew yaml", "crew.yaml")
+    run_dir = str(tmp_path / "run")
 
     m = mock.Mock(return_value="DONE")
     monkeypatch.setattr("gat.phases.execution_phase.run", m)
-    monkeypatch.setattr("gat.config_loader.load_models", lambda p, preset=None: MODELS)
 
     from gat.cli import main
-    main(["run", "--rd", rd_path, "--crew", crew_path])
+    main(["--run-dir", run_dir, "run", "--rd", rd_path, "--crew", crew_path])
     m.assert_called_once()
+    assert m.call_args.kwargs["rd_path"] == rd_path
+    assert m.call_args.kwargs["crew_yaml_path"] == crew_path
 
 
 # --- Integration test 3: Config validation round-trip ---
@@ -163,33 +162,28 @@ def test_config_load_validate_roundtrip(tmp_path):
     crew_path = tmp_path / "crew.yaml"
     with open(crew_path, 'w') as f:
         yaml.dump(VALID_CREW_YAML, f)
-    models_path = tmp_path / "models.yaml"
-    with open(models_path, 'w') as f:
-        yaml.dump(MODELS, f)
 
-    from gat.config_loader import load_crew, load_models, validate_crew
-    models = load_models(str(models_path))
+    from gat.config_loader import load_crew, validate_crew
     crew = load_crew(str(crew_path))
-    validate_crew(crew, models)  # should not raise
+    validate_crew(crew, MODELS)  # should not raise
 
 
 # --- Integration test 4: Work log integrity ---
 
-@patch("gat.phases.requirements_phase.LLM", MagicMock)
-@patch("gat.phases.requirements_phase.Agent", MagicMock)
-@patch("gat.phases.requirements_phase.Task", MagicMock)
 @patch("gat.phases.requirements_phase.Crew")
-def test_work_log_integrity(mock_crew, tmp_path):
+@patch("gat.phases.requirements_phase.Task", MagicMock)
+@patch("gat.phases.requirements_phase.Agent", MagicMock)
+@patch("gat.config_loader.make_llm", return_value=MagicMock())
+def test_work_log_integrity(mock_llm, mock_crew, tmp_path):
     mock_crew.return_value.kickoff.return_value = _mock_kickoff_result("OUTPUT", 2)
 
     rd_path = make_temp_file(tmp_path, "Requirements here", "rd.md")
-    log_dir = str(tmp_path / "logs")
-    output_path = str(tmp_path / "review.md")
+    run_dir = str(tmp_path / "run")
 
     from gat.phases import requirements_phase
-    requirements_phase.run(rd_path, MODELS, log_dir, output_path)
+    requirements_phase.run(rd_path, MODELS, run_dir)
 
-    log_phase = os.path.join(log_dir, "requirements")
+    log_phase = os.path.join(run_dir, "logs", "requirements")
     assert os.path.isdir(log_phase)
     md_files = [f for f in os.listdir(log_phase) if f.endswith(".md")]
     assert len(md_files) >= 1

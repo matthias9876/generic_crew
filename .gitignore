@@ -63,3 +63,7 @@ poetry.lock
 # Ignore local tmp and output folders
 tmp/
 output/
+runs/
+
+# Local config with credentials
+gat/gat.local.yaml

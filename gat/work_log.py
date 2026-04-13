@@ -33,7 +33,7 @@ def append_run(
         produced_files_section = "\n### Produced Files\n"
         for f in produced_files:
             fname = os.path.basename(f)
-            rel_path = os.path.relpath(f, log_file_dir)
+            rel_path = os.path.relpath(f, log_dir)
             produced_files_section += f"- [{fname}]({rel_path})\n"
 
     # Compose log entry

@@ -2,7 +2,8 @@ import pytest
 import os
 import tempfile
 import yaml
-from gat.config_loader import load_models, load_crew, validate_crew
+from unittest.mock import patch, MagicMock
+from gat.config_loader import load_models, load_crew, validate_crew, make_llm, _resolve_instance
 
 def test_load_models_happy_path(tmp_path):
     models_yaml = {'models': {'large': 'ollama/qwen3.5:35b-ctx32k'}}
@@ -109,3 +110,88 @@ def test_load_crew_happy_path(tmp_path):
         yaml.dump(crew_yaml, f)
     result = load_crew(str(path))
     assert 'agents' in result and 'tasks' in result
+
+
+# ---------------------------------------------------------------------------
+# _resolve_instance
+# ---------------------------------------------------------------------------
+
+def _cfg_with_instances(instances, default='local'):
+    return {'ollama_instances': instances, 'default_instance': default}
+
+
+def test_resolve_instance_default():
+    cfg = _cfg_with_instances({'local': {'host': 'localhost', 'port': 11434}})
+    inst = _resolve_instance(cfg, None)
+    assert inst['host'] == 'localhost'
+    assert inst['port'] == 11434
+
+
+def test_resolve_instance_named():
+    cfg = _cfg_with_instances({
+        'local': {'host': 'localhost', 'port': 11434},
+        'remote': {'host': '10.17.90.127', 'port': 8443, 'username': 'admin', 'password': 'secret'},
+    })
+    inst = _resolve_instance(cfg, 'remote')
+    assert inst['host'] == '10.17.90.127'
+    assert inst['port'] == 8443
+    assert inst['username'] == 'admin'
+
+
+def test_resolve_instance_unknown_raises():
+    cfg = _cfg_with_instances({'local': {'host': 'localhost', 'port': 11434}})
+    with pytest.raises(ValueError, match="Unknown Ollama instance 'ghost'"):
+        _resolve_instance(cfg, 'ghost')
+
+
+# ---------------------------------------------------------------------------
+# make_llm — instance resolution and auth header injection
+# ---------------------------------------------------------------------------
+
+def _make_preset(model_str='ollama/test:latest', instance_override=None):
+    preset = {'models': {'coder': model_str}}
+    if instance_override:
+        preset['instances'] = {'coder': instance_override}
+    return preset
+
+
+def test_make_llm_no_auth_sets_base_url():
+    cfg = _cfg_with_instances({'local': {'host': 'localhost', 'port': 11434}})
+    preset = _make_preset()
+    with patch('crewai.LLM') as MockLLM:
+        MockLLM.return_value = MagicMock()
+        make_llm(preset, 'coder', config=cfg)
+        call_kwargs = MockLLM.call_args[1]
+        assert call_kwargs['base_url'] == 'http://localhost:11434'
+        assert 'extra_headers' not in call_kwargs
+
+
+def test_make_llm_with_auth_sets_authorization_header():
+    cfg = _cfg_with_instances({
+        'remote': {'host': '10.17.90.127', 'port': 8443,
+                   'username': 'admin', 'password': 'aF7t'},
+    }, default='remote')
+    preset = _make_preset()
+    with patch('crewai.LLM') as MockLLM:
+        MockLLM.return_value = MagicMock()
+        make_llm(preset, 'coder', config=cfg)
+        call_kwargs = MockLLM.call_args[1]
+        assert call_kwargs['base_url'] == 'http://10.17.90.127:8443'
+        auth = call_kwargs['extra_headers']['Authorization']
+        assert auth.startswith('Basic ')
+        import base64
+        decoded = base64.b64decode(auth.split(' ', 1)[1]).decode()
+        assert decoded == 'admin:aF7t'
+
+
+def test_make_llm_per_role_instance_override():
+    cfg = _cfg_with_instances({
+        'local': {'host': 'localhost', 'port': 11434},
+        'gpu_box': {'host': '192.168.1.10', 'port': 11434},
+    })
+    preset = _make_preset(instance_override='gpu_box')
+    with patch('crewai.LLM') as MockLLM:
+        MockLLM.return_value = MagicMock()
+        make_llm(preset, 'coder', config=cfg)
+        call_kwargs = MockLLM.call_args[1]
+        assert 'gpu_box' in call_kwargs['base_url'] or '192.168.1.10' in call_kwargs['base_url']

@@ -3,7 +3,7 @@ import yaml
 from typing import Dict
 from gat import config_loader, work_log
 
-from crewai import Crew, Agent, Task, Process, LLM
+from crewai import Crew, Agent, Task, Process
 
 
 _HIRING_PROMPT = """\
@@ -27,14 +27,24 @@ Requirements:
 """
 
 
-def run(rd_path: str, models: Dict, log_dir: str, output_yaml_path: str) -> str:
+def run(rd_path: str, models: Dict, run_dir: str,
+        pipeline_cfg: dict = None) -> str:
+    """Run the crew hiring phase.
+
+    Writes crew.yaml into run_dir.
+    Logs go to run_dir/logs/hiring/.
+    Returns the absolute path of crew.yaml.
+    """
     if not os.path.isfile(rd_path):
         raise FileNotFoundError(f"Requirements document not found: {rd_path}")
+
+    os.makedirs(run_dir, exist_ok=True)
+    log_dir = os.path.join(run_dir, "logs")
 
     with open(rd_path, 'r', encoding='utf-8') as f:
         requirements = f.read()
 
-    llm = config_loader.make_llm(models, 'requirements')
+    llm = config_loader.make_llm(models, 'requirements', config=pipeline_cfg)
 
     hiring_manager = Agent(
         role="Hiring Manager",
@@ -58,8 +68,10 @@ def run(rd_path: str, models: Dict, log_dir: str, output_yaml_path: str) -> str:
         verbose=True,
     )
 
+    output_yaml_path = os.path.join(run_dir, "crew.yaml")
+
     last_error = None
-    for attempt in range(3):
+    for _ in range(3):
         result = crew.kickoff()
         crew_yaml_str = result.raw if hasattr(result, 'raw') else str(result)
 
@@ -76,9 +88,6 @@ def run(rd_path: str, models: Dict, log_dir: str, output_yaml_path: str) -> str:
             data = yaml.safe_load(cleaned)
             config_loader.validate_crew(data, models)
 
-            out_dir = os.path.dirname(output_yaml_path)
-            if out_dir:
-                os.makedirs(out_dir, exist_ok=True)
             with open(output_yaml_path, 'w', encoding='utf-8') as f:
                 yaml.dump(data, f, sort_keys=False, allow_unicode=True)
 
