@@ -1,6 +1,7 @@
 import base64
 import os
 import yaml
+import httpx
 from typing import Dict, Optional
 
 
@@ -117,6 +118,34 @@ def _resolve_instance(config: dict, instance_name: Optional[str]) -> dict:
     return instances[instance_name]
 
 
+def _ensure_ollama_model_available(model_str: str, base_url: str, extra_headers: Optional[dict] = None) -> None:
+    """Ensure the Ollama model exists on the target instance; pull if missing."""
+    if not model_str.startswith("ollama/"):
+        return
+
+    model_name = model_str.split("/", 1)[1]
+    headers = extra_headers or {}
+
+    tags_resp = httpx.get(f"{base_url}/api/tags", headers=headers, timeout=30.0)
+    tags_resp.raise_for_status()
+    tags_payload = tags_resp.json() or {}
+    available = {
+        item.get("name") or item.get("model")
+        for item in tags_payload.get("models", [])
+        if isinstance(item, dict)
+    }
+    if model_name in available:
+        return
+
+    pull_resp = httpx.post(
+        f"{base_url}/api/pull",
+        headers=headers,
+        json={"name": model_name, "stream": False},
+        timeout=300.0,
+    )
+    pull_resp.raise_for_status()
+
+
 def make_llm(preset_data: dict, role: str, config: Optional[dict] = None):
     """Create a CrewAI LLM for the given role.
 
@@ -158,6 +187,8 @@ def make_llm(preset_data: dict, role: str, config: Optional[dict] = None):
     kwargs = {'model': model_str, 'base_url': base_url}
     if extra_headers:
         kwargs['extra_headers'] = extra_headers
+
+    _ensure_ollama_model_available(model_str, base_url, extra_headers=extra_headers)
 
     return LLM(**kwargs)
 
