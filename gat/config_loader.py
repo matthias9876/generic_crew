@@ -127,7 +127,7 @@ def _ensure_ollama_model_available(model_str: str, base_url: str, extra_headers:
     headers = extra_headers or {}
 
     try:
-        tags_resp = httpx.get(f"{base_url}/api/tags", headers=headers, timeout=30.0)
+        tags_resp = httpx.get(f"{base_url}/api/tags", headers=headers, timeout=60.0)
         tags_resp.raise_for_status()
         tags_payload = tags_resp.json()
     except Exception as exc:
@@ -197,11 +197,11 @@ def make_llm(preset_data: dict, role: str, config: Optional[dict] = None):
         token = base64.b64encode(credentials.encode()).decode()
         extra_headers['Authorization'] = f"Basic {token}"
 
+    _ensure_ollama_model_available(model_str, base_url, extra_headers=extra_headers)
+
     kwargs = {'model': model_str, 'base_url': base_url}
     if extra_headers:
         kwargs['extra_headers'] = extra_headers
-
-    _ensure_ollama_model_available(model_str, base_url, extra_headers=extra_headers)
 
     return LLM(**kwargs)
 
