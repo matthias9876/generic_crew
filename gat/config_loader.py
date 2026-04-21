@@ -126,24 +126,37 @@ def _ensure_ollama_model_available(model_str: str, base_url: str, extra_headers:
     model_name = model_str.split("/", 1)[1]
     headers = extra_headers or {}
 
-    tags_resp = httpx.get(f"{base_url}/api/tags", headers=headers, timeout=30.0)
-    tags_resp.raise_for_status()
-    tags_payload = tags_resp.json() or {}
-    available = {
-        item.get("name") or item.get("model")
-        for item in tags_payload.get("models", [])
-        if isinstance(item, dict)
-    }
+    try:
+        tags_resp = httpx.get(f"{base_url}/api/tags", headers=headers, timeout=30.0)
+        tags_resp.raise_for_status()
+        tags_payload = tags_resp.json()
+    except Exception as exc:
+        raise RuntimeError(
+            f"Failed to query Ollama models from '{base_url}' while checking '{model_name}'."
+        ) from exc
+
+    available = set()
+    for item in tags_payload.get("models", []):
+        if not isinstance(item, dict):
+            continue
+        found_name = item.get("name") or item.get("model")
+        if found_name:
+            available.add(found_name)
     if model_name in available:
         return
 
-    pull_resp = httpx.post(
-        f"{base_url}/api/pull",
-        headers=headers,
-        json={"name": model_name, "stream": False},
-        timeout=300.0,
-    )
-    pull_resp.raise_for_status()
+    try:
+        pull_resp = httpx.post(
+            f"{base_url}/api/pull",
+            headers=headers,
+            json={"name": model_name, "stream": False},
+            timeout=300.0,
+        )
+        pull_resp.raise_for_status()
+    except Exception as exc:
+        raise RuntimeError(
+            f"Failed to pull Ollama model '{model_name}' from '{base_url}'."
+        ) from exc
 
 
 def make_llm(preset_data: dict, role: str, config: Optional[dict] = None):

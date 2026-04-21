@@ -239,3 +239,14 @@ def test_make_llm_pulls_when_model_missing():
         call = mock_post.call_args
         assert call[0][0] == 'http://localhost:11434/api/pull'
         assert call[1]['json'] == {'name': 'qwen2.5-coder:7b', 'stream': False}
+
+
+def test_make_llm_raises_clear_error_when_ollama_unreachable():
+    cfg = _cfg_with_instances({'local': {'host': 'localhost', 'port': 11434}})
+    preset = _make_preset(model_str='ollama/qwen2.5-coder:7b')
+
+    with patch('gat.config_loader.httpx.get', side_effect=Exception("boom")), \
+         patch('crewai.LLM') as MockLLM:
+        MockLLM.return_value = MagicMock()
+        with pytest.raises(RuntimeError, match="Failed to query Ollama models"):
+            make_llm(preset, 'coder', config=cfg)
