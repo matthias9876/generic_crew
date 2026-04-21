@@ -158,12 +158,14 @@ def _make_preset(model_str='ollama/test:latest', instance_override=None):
 def test_make_llm_no_auth_sets_base_url():
     cfg = _cfg_with_instances({'local': {'host': 'localhost', 'port': 11434}})
     preset = _make_preset()
-    with patch('crewai.LLM') as MockLLM:
+    with patch('gat.config_loader._ensure_ollama_model_available') as mock_ensure, \
+         patch('crewai.LLM') as MockLLM:
         MockLLM.return_value = MagicMock()
         make_llm(preset, 'coder', config=cfg)
         call_kwargs = MockLLM.call_args[1]
         assert call_kwargs['base_url'] == 'http://localhost:11434'
         assert 'extra_headers' not in call_kwargs
+        mock_ensure.assert_called_once()
 
 
 def test_make_llm_with_auth_sets_authorization_header():
@@ -172,7 +174,8 @@ def test_make_llm_with_auth_sets_authorization_header():
                    'username': 'admin', 'password': 'aF7t'},
     }, default='remote')
     preset = _make_preset()
-    with patch('crewai.LLM') as MockLLM:
+    with patch('gat.config_loader._ensure_ollama_model_available') as mock_ensure, \
+         patch('crewai.LLM') as MockLLM:
         MockLLM.return_value = MagicMock()
         make_llm(preset, 'coder', config=cfg)
         call_kwargs = MockLLM.call_args[1]
@@ -182,6 +185,7 @@ def test_make_llm_with_auth_sets_authorization_header():
         import base64
         decoded = base64.b64decode(auth.split(' ', 1)[1]).decode()
         assert decoded == 'admin:aF7t'
+        mock_ensure.assert_called_once()
 
 
 def test_make_llm_per_role_instance_override():
@@ -190,11 +194,13 @@ def test_make_llm_per_role_instance_override():
         'gpu_box': {'host': '192.168.1.10', 'port': 11434},
     })
     preset = _make_preset(instance_override='gpu_box')
-    with patch('crewai.LLM') as MockLLM:
+    with patch('gat.config_loader._ensure_ollama_model_available') as mock_ensure, \
+         patch('crewai.LLM') as MockLLM:
         MockLLM.return_value = MagicMock()
         make_llm(preset, 'coder', config=cfg)
         call_kwargs = MockLLM.call_args[1]
         assert 'gpu_box' in call_kwargs['base_url'] or '192.168.1.10' in call_kwargs['base_url']
+        mock_ensure.assert_called_once()
 
 
 def test_make_llm_does_not_pull_when_model_exists():
