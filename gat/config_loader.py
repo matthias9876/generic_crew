@@ -1,6 +1,7 @@
 import base64
 import os
 import yaml
+import httpx
 from typing import Dict, Optional
 
 
@@ -117,6 +118,47 @@ def _resolve_instance(config: dict, instance_name: Optional[str]) -> dict:
     return instances[instance_name]
 
 
+def _ensure_ollama_model_available(model_str: str, base_url: str, extra_headers: Optional[dict] = None) -> None:
+    """Ensure the Ollama model exists on the target instance; pull if missing."""
+    if not model_str.startswith("ollama/"):
+        return
+
+    model_name = model_str.split("/", 1)[1]
+    headers = extra_headers or {}
+
+    try:
+        tags_resp = httpx.get(f"{base_url}/api/tags", headers=headers, timeout=60.0)
+        tags_resp.raise_for_status()
+        tags_payload = tags_resp.json()
+    except Exception as exc:
+        raise RuntimeError(
+            f"Failed to query Ollama models from '{base_url}' while checking '{model_name}'."
+        ) from exc
+
+    available = set()
+    for item in tags_payload.get("models", []):
+        if not isinstance(item, dict):
+            continue
+        found_name = item.get("name") or item.get("model")
+        if found_name:
+            available.add(found_name)
+    if model_name in available:
+        return
+
+    try:
+        pull_resp = httpx.post(
+            f"{base_url}/api/pull",
+            headers=headers,
+            json={"name": model_name, "stream": False},
+            timeout=300.0,
+        )
+        pull_resp.raise_for_status()
+    except Exception as exc:
+        raise RuntimeError(
+            f"Failed to pull Ollama model '{model_name}' from '{base_url}'."
+        ) from exc
+
+
 def make_llm(preset_data: dict, role: str, config: Optional[dict] = None):
     """Create a CrewAI LLM for the given role.
 
@@ -154,6 +196,8 @@ def make_llm(preset_data: dict, role: str, config: Optional[dict] = None):
         credentials = f"{instance['username']}:{instance['password']}"
         token = base64.b64encode(credentials.encode()).decode()
         extra_headers['Authorization'] = f"Basic {token}"
+
+    _ensure_ollama_model_available(model_str, base_url, extra_headers=extra_headers)
 
     kwargs = {'model': model_str, 'base_url': base_url}
     if extra_headers:
